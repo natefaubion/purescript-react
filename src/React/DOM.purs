@@ -1,20 +1,13 @@
 module React.DOM where
 
-import React (ReactElement, TagName, createElementTagName, createElementTagNameDynamic)
+import React (ReactElement, TagName, createElementTagName)
 import React.DOM.Props (Props, unsafeFromPropsArray)
 import Unsafe.Coerce (unsafeCoerce)
 
 newtype IsDynamic = IsDynamic Boolean
 
-mkDOM ::
-  IsDynamic -> TagName -> Array Props -> Array ReactElement -> ReactElement
-mkDOM dynamic tag props = createElement tag (unsafeFromPropsArray props)
-  where
-  createElement :: TagName -> Array Props -> Array ReactElement -> ReactElement
-  createElement =
-    case dynamic of
-         IsDynamic false -> createElementTagName
-         IsDynamic true -> createElementTagNameDynamic
+mkDOM :: IsDynamic -> TagName -> Array Props -> Array ReactElement -> ReactElement
+mkDOM _ tag props = createElementTagName tag (unsafeFromPropsArray props)
 
 text :: String -> ReactElement
 text = unsafeCoerce

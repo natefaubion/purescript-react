@@ -41,22 +41,24 @@ module React
   , forceUpdateWithCallback
 
   , createElement
-  , createElementDynamic
   , createElementTagName
-  , createElementTagNameDynamic
   , createLeafElement
+  , createInlineElement
 
   , SyntheticEventHandler
 
   , Children
   , childrenToArray
   , childrenCount
+  , toChildren
 
+  , ReactReservedPropFields
   , class ReactPropFields
   , class IsReactElement
   , toElement
   , fragmentWithKey
 
+  , Context
   , ContextProvider
   , ContextConsumer
   , createContext
@@ -64,7 +66,9 @@ module React
 
 import Prelude
 
-import Data.Nullable (Nullable)
+import Data.Function.Uncurried as Fn
+import Data.Maybe (Maybe(..))
+import Data.Nullable (Nullable, toNullable)
 import Effect (Effect)
 import Effect.Exception (Error)
 import Effect.Uncurried (EffectFn1)
@@ -340,15 +344,15 @@ foreign import forceUpdateWithCallback :: forall props state.
 
 class ReactPropFields (required :: # Type) (given :: # Type)
 
-type ReservedReactPropFields r =
+type ReactReservedPropFields r =
   ( key :: String
   , ref :: SyntheticEventHandler (Nullable ReactRef)
   | r
   )
 
 instance reactPropFields ::
-  ( Row.Union given optional (ReservedReactPropFields required)
-  , Row.Union optional leftover (ReservedReactPropFields ())
+  ( Row.Union given (ReactReservedPropFields ()) all
+  , Row.Nub all (ReactReservedPropFields required)
   ) =>
   ReactPropFields required given
 
@@ -361,20 +365,25 @@ createElement :: forall required given.
   ReactElement
 createElement = createElementImpl
 
--- | Create an element from a React class passing the children array. Used for a dynamic array of children.
-createElementDynamic :: forall required given.
-  ReactPropFields required given =>
-  ReactClass { children :: Children | required } ->
-  { | given } ->
-  Array ReactElement ->
+createInlineElement :: forall props.
+  Maybe (EffectFn1 ReactRef Unit) ->
+  Maybe String ->
+  ReactClass (Record props) ->
+  (Record props) ->
   ReactElement
-createElementDynamic = createElementDynamicImpl
+createInlineElement ref key cls props =
+  Fn.runFn4 createInlineElementImpl cls (toNullable key) (toNullable ref) props
 
 foreign import createElementImpl :: forall required given children.
   ReactClass required -> given -> Array children -> ReactElement
 
-foreign import createElementDynamicImpl :: forall required given children.
-  ReactClass required -> given -> Array children -> ReactElement
+foreign import createInlineElementImpl :: forall element props.
+  Fn.Fn4
+    element
+    (Nullable String)
+    (Nullable (EffectFn1 ReactRef Unit))
+    props
+    (ReactElement)
 
 -- | Create an element from a React class that does not require children.
 createLeafElement :: forall required given.
@@ -388,12 +397,20 @@ foreign import createLeafElementImpl :: forall required given.
   ReactClass required -> given -> ReactElement
 
 -- | Create an element from a tag name spreading the children array. Used when the children are known up front.
-foreign import createElementTagName :: forall props.
-  TagName -> props -> Array ReactElement -> ReactElement
+foreign import createElementTagNameImpl :: forall props.
+  Fn.Fn3
+    TagName
+    (Record props)
+    (Array ReactElement)
+    ReactElement
 
--- | Create an element from a tag name passing the children array. Used for a dynamic array of children.
-foreign import createElementTagNameDynamic :: forall props.
-  TagName -> props -> Array ReactElement -> ReactElement
+createElementTagName :: forall props.
+  TagName ->
+  Record props ->
+  Array ReactElement ->
+  ReactElement
+createElementTagName tag props children =
+  Fn.runFn3 createElementTagNameImpl tag props children
 
 -- | Internal representation for the children elements passed to a component
 foreign import data Children :: Type
@@ -423,7 +440,7 @@ instance isReactElementReactElement :: IsReactElement ReactElement where
   toElement = identity
 
 instance isReactElementArray :: IsReactElement (Array ReactElement) where
-  toElement = createElement fragment {}
+  toElement children = createInlineElement Nothing Nothing fragment { children: toChildren children }
 
 -- | Creates a keyed fragment.
 fragmentWithKey :: String -> Array ReactElement -> ReactElement
@@ -433,9 +450,12 @@ type ContextProvider a = ReactClass { children :: Children, value :: a }
 
 type ContextConsumer a = ReactClass { children :: a -> ReactElement }
 
--- | Create a new context provider/consumer pair given a default value.
-foreign import createContext :: forall a.
-  a ->
+type Context a =
   { consumer :: ContextConsumer a
   , provider :: ContextProvider a
   }
+
+-- | Create a new context provider/consumer pair given a default value.
+foreign import createContext :: forall a. a -> Context a
+
+foreign import toChildren :: Array ReactElement -> Children

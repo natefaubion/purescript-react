@@ -137,12 +137,37 @@ exports.forceUpdateWithCallback = forceUpdateWithCallback;
 function createElement(class_) {
   return function(props){
     return function(children){
-      return React.createElement.apply(React, [class_, props].concat(children));
+      var args = [class_, props].concat(children);
+      var element = React.createElement.apply(React, args);
+      console.log(args, element);
+      return  element;
     };
   };
 }
 exports.createElementImpl = createElement;
-exports.createElementTagName = createElement;
+
+function createElementTagNameImpl(tag, props, children) {
+  var newProps = props;
+  var key = null;
+  var ref = null;
+  if (props.hasOwnProperty('key') || props.hasOwnProperty('ref') || children.length) {
+    newProps = {};
+    for (var k in props) {
+      if (k === 'key') {
+        key = props[k];
+      } else if (k === 'ref') {
+        ref = props[k];
+      } else {
+        newProps[k] = props[k];
+      }
+    }
+    if (children.length) {
+      newProps.children = toChildren(children);
+    }
+  }
+  return createInlineElementImpl(tag, key, ref, newProps);
+}
+exports.createElementTagNameImpl = createElementTagNameImpl
 
 function createLeafElement(class_) {
   return function(props) {
@@ -150,16 +175,6 @@ function createLeafElement(class_) {
   };
 }
 exports.createLeafElementImpl = createLeafElement;
-
-function createElementDynamic(class_) {
-  return function(props) {
-    return function(children){
-      return React.createElement(class_, props, children);
-    };
-  };
-};
-exports.createElementDynamicImpl = createElementDynamic;
-exports.createElementTagNameDynamic = createElementDynamic;
 
 function createContext(defaultValue) {
   var context = React.createContext(defaultValue);
@@ -169,3 +184,39 @@ function createContext(defaultValue) {
   };
 }
 exports.createContext = createContext;
+
+var REACT_ELEMENT_TYPE =
+  (typeof Symbol === 'function' && Symbol.for && Symbol.for('react.element')) || 0xeac7;
+
+function createInlineElementImpl(type, key, ref, props) {
+  var defaultProps = type && typeof type !== "string" && type.defaultProps;
+  var newProps = props;
+  if (defaultProps) {
+    newProps = {};
+    for (var k in defaultProps) {
+      newProps[k] = defaultProps[k];
+    }
+    for (var k in props) {
+      newProps[k] = props[k];
+    }
+  }
+  return {
+    $$typeof: REACT_ELEMENT_TYPE,
+    type: type,
+    key: key,
+    ref: ref,
+    props: newProps
+  };
+}
+exports.createInlineElementImpl = createInlineElementImpl;
+
+function toChildren(arr) {
+  if (arr.length === 0) {
+    return null;
+  }
+  if (arr.length === 1) {
+    return arr[0];
+  }
+  return arr;
+}
+exports.toChildren = toChildren;
