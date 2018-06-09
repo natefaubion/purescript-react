@@ -139,8 +139,7 @@ function createElement(class_) {
     return function(children){
       var args = [class_, props].concat(children);
       var element = React.createElement.apply(React, args);
-      console.log(args, element);
-      return  element;
+      return element;
     };
   };
 }
@@ -185,29 +184,52 @@ function createContext(defaultValue) {
 }
 exports.createContext = createContext;
 
-var REACT_ELEMENT_TYPE =
-  (typeof Symbol === 'function' && Symbol.for && Symbol.for('react.element')) || 0xeac7;
+var createInlineElementImpl = function() {
+  var REACT_ELEMENT_TYPE =
+    (typeof Symbol === 'function' && Symbol.for && Symbol.for('react.element')) || 0xeac7;
 
-function createInlineElementImpl(type, key, ref, props) {
-  var defaultProps = type && typeof type !== "string" && type.defaultProps;
-  var newProps = props;
-  if (defaultProps) {
-    newProps = {};
-    for (var k in defaultProps) {
-      newProps[k] = defaultProps[k];
+  function copyDefaultProps(type, props) {
+    var defaultProps = type && typeof type !== "string" && type.defaultProps;
+    var newProps = props;
+    if (defaultProps) {
+      newProps = {};
+      for (var k in defaultProps) {
+        newProps[k] = defaultProps[k];
+      }
+      for (var k in props) {
+        newProps[k] = props[k];
+      }
     }
-    for (var k in props) {
-      newProps[k] = props[k];
+    return newProps;
+  }
+
+  var testElement = React.createElement("div");
+
+  if (Object.getOwnPropertyDescriptor(testElement, '_store')) {
+    return function createElementWithValidation(type, key, ref, props) {
+      return {
+        $$typeof: REACT_ELEMENT_TYPE,
+        type: type,
+        key: key,
+        ref: ref,
+        props: copyDefaultProps(type, props),
+        _owner: null,
+        _self: null,
+        _store: { validated: true }
+      };
     }
   }
-  return {
-    $$typeof: REACT_ELEMENT_TYPE,
-    type: type,
-    key: key,
-    ref: ref,
-    props: newProps
-  };
-}
+  return function createElement(type, key, ref, props) {
+    return {
+      $$typeof: REACT_ELEMENT_TYPE,
+      type: type,
+      key: key,
+      ref: ref,
+      props: copyDefaultProps(type, props),
+      _owner: null,
+    };
+  }
+}();
 exports.createInlineElementImpl = createInlineElementImpl;
 
 function toChildren(arr) {

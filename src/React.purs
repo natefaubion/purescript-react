@@ -41,9 +41,14 @@ module React
   , forceUpdateWithCallback
 
   , createElement
+  , createElementDynamic
   , createElementTagName
+  , createElementTagNameDynamic
   , createLeafElement
   , createInlineElement
+  , unsafeCreateElement
+  , unsafeCreateElementDynamic
+  , unsafeCreateLeafElement
 
   , SyntheticEventHandler
 
@@ -174,10 +179,7 @@ type ReactClassConstructor props state r =
 class ReactComponentSpec props state snapshot (given :: # Type) (spec :: # Type)
 
 instance reactComponentSpec ::
-  ( Row.Union
-      (ReactSpecRequired state given)
-      (ReactSpecAll props state ReactUnusedSnapshot)
-      spec
+  ( Row.Union given (ReactSpecAll props state ReactUnusedSnapshot) spec
   , Row.Nub spec (ReactSpecAll props state snapshot)
   ) =>
   ReactComponentSpec props state snapshot given spec
@@ -185,11 +187,8 @@ instance reactComponentSpec ::
 class ReactPureComponentSpec props state snapshot (given :: # Type) (spec :: # Type)
 
 instance reactPureComponentSpec ::
-  ( Row.Union
-      (ReactSpecRequired state given)
-      (ReactSpecPure props state ReactUnusedSnapshot)
-      spec
-  , Row.Nub spec (ReactSpecAll props state snapshot)
+  ( Row.Union given (ReactSpecPure props state ReactUnusedSnapshot) spec
+  , Row.Nub spec (ReactSpecPure props state snapshot)
   ) =>
   ReactPureComponentSpec props state snapshot given spec
 
@@ -374,6 +373,33 @@ createInlineElement :: forall props.
 createInlineElement ref key cls props =
   Fn.runFn4 createInlineElementImpl cls (toNullable key) (toNullable ref) props
 
+-- | An unsafe version of `createElement` which does not enforce the reserved
+-- | properties "key" and "ref".
+unsafeCreateElement :: forall props.
+  ReactClass { children :: Children | props } ->
+  { | props } ->
+  Array ReactElement ->
+  ReactElement
+unsafeCreateElement = createElementImpl
+
+-- | Create an element from a React class passing the children array. Used for a dynamic array of children.
+createElementDynamic :: forall required given.
+  ReactPropFields required given =>
+  ReactClass { children :: Children | required } ->
+  { | given } ->
+  Array ReactElement ->
+  ReactElement
+createElementDynamic = createElementImpl
+
+-- | An unsafe version of `createElementDynamic` which does not enforce the reserved
+-- | properties "key" and "ref".
+unsafeCreateElementDynamic :: forall props.
+  ReactClass { children :: Children | props } ->
+  { | props } ->
+  Array ReactElement ->
+  ReactElement
+unsafeCreateElementDynamic = createElementImpl
+
 foreign import createElementImpl :: forall required given children.
   ReactClass required -> given -> Array children -> ReactElement
 
@@ -393,6 +419,14 @@ createLeafElement :: forall required given.
   ReactElement
 createLeafElement = createLeafElementImpl
 
+-- | An unsafe version of `createLeafElement` which does not enforce the reserved
+-- | properties "key" and "ref".
+unsafeCreateLeafElement :: forall props.
+  ReactClass props ->
+  props ->
+  ReactElement
+unsafeCreateLeafElement = createLeafElementImpl
+
 foreign import createLeafElementImpl :: forall required given.
   ReactClass required -> given -> ReactElement
 
@@ -410,6 +444,14 @@ createElementTagName :: forall props.
   Array ReactElement ->
   ReactElement
 createElementTagName tag props children =
+  Fn.runFn3 createElementTagNameImpl tag props children
+
+createElementTagNameDynamic :: forall props.
+  TagName ->
+  Record props ->
+  Array ReactElement ->
+  ReactElement
+createElementTagNameDynamic tag props children =
   Fn.runFn3 createElementTagNameImpl tag props children
 
 -- | Internal representation for the children elements passed to a component
@@ -446,14 +488,14 @@ instance isReactElementArray :: IsReactElement (Array ReactElement) where
 fragmentWithKey :: String -> Array ReactElement -> ReactElement
 fragmentWithKey = createElement fragment <<< { key: _ }
 
-type ContextProvider a = ReactClass { children :: Children, value :: a }
-
-type ContextConsumer a = ReactClass { children :: a -> ReactElement }
-
 type Context a =
   { consumer :: ContextConsumer a
   , provider :: ContextProvider a
   }
+
+type ContextProvider a = ReactClass { children :: Children, value :: a }
+
+type ContextConsumer a = ReactClass { children :: a -> ReactElement }
 
 -- | Create a new context provider/consumer pair given a default value.
 foreign import createContext :: forall a. a -> Context a
